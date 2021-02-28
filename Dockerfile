@@ -21,16 +21,16 @@ RUN wget 'https://github.com/itzg/rcon-cli/releases/download/1.4.8/rcon-cli_1.4.
   && chmod 755 /usr/local/bin/rcon-cli
 
 # create backup user
-RUN useradd -u 2000 -mU -s /bin/bash mcbackup && \
-  mkdir /home/mcbackup/app && \
-  chown mcbackup:mcbackup /home/mcbackup/app
+RUN useradd -u 1000 -mU -s /bin/bash minecraft && \
+  mkdir /home/minecraft/app && \
+  chown minecraft:2000 /home/minecraft/app
 
 # add backup script
-WORKDIR /home/mcbackup/app
+WORKDIR /home/minecraft/app
 COPY backup.sh ./
 
-RUN chmod u+x /home/mcbackup/app/backup.sh
-RUN chown -R mcbackup:mcbackup /home/mcbackup/app
-USER mcbackup
+RUN chmod u+x /home/minecraft/app/backup.sh
+RUN chown -R minecraft:2000 /home/minecraft/app
+USER minecraft
 
-CMD ["/home/mcbackup/app/backup.sh"]
+CMD ["/home/minecraft/app/backup.sh"]

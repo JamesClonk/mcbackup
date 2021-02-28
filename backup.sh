@@ -50,6 +50,14 @@ if [[ -z "${FILE_RETENTION}" ]]; then
 	echo "FILE_RETENTION is missing"
 	exit 1
 fi
+if [[ -z "${INITIAL_DELAY}" ]]; then
+	echo "INITIAL_DELAY is missing"
+	exit 1
+fi
+if [[ -z "${BACKUP_INTERVAL}" ]]; then
+	echo "BACKUP_INTERVAL is missing"
+	exit 1
+fi
 if [[ -z "${S3_UPLOAD_ENABLED}" ]]; then
 	echo "S3_UPLOAD_ENABLED is missing"
 	exit 1
@@ -78,41 +86,56 @@ if [[ "${S3_UPLOAD_ENABLED}" == "true" ]]; then
 fi
 set -x
 
+# main loop
+sleep ${INITIAL_DELAY}
+while true; do
 
-# =============================================================================================
-echo "waiting on minecraft server ..."
-retry 5 5 rcon-cli say "mcbackup here, preparing to backup world ..."
-echo "minecraft server is up!"
+	# =============================================================================================
+	echo "waiting on minecraft server ..."
+	retry 5 5 rcon-cli say "mcbackup here, preparing to backup world ..."
+	echo "minecraft server is up!"
 
-# =============================================================================================
-# backup minecraft world
-mkdir -p "${RCON_SAVEPATH}" || true
-TIMESTAMP=$(date "+%Y%m%d%H%M%S")
-BACKUPFILE="${RCON_SAVEPATH}/${TIMESTAMP}.tar.gz"
+	# =============================================================================================
+	# backup minecraft world
+	mkdir -p "${RCON_SAVEPATH}" || true
+	TIMESTAMP=$(date "+%Y%m%d%H%M%S")
+	BACKUPFILE="${RCON_SAVEPATH}/${TIMESTAMP}.tar.gz"
 
-# create backup
-rcon-cli save-off
-sleep 5
-rcon-cli save-all
-sleep 60
-retry 5 15 tar -cvzf "${BACKUPFILE}" "${RCON_WORLDPATH}"
-rcon-cli save-on
-rcon-cli say "backup complete!"
+	# create backup
+	retry 5 5 rcon-cli save-off
+	trap 'retry 5 5 rcon-cli save-on' EXIT
+	sleep 5
+	retry 5 5 rcon-cli save-all
+	sync
+	sleep 60
+	retry 5 15 tar -cvzf "${BACKUPFILE}" "${RCON_WORLDPATH}"
+	retry 5 5 rcon-cli save-on
+	retry 5 5 rcon-cli say "backup complete!"
+	trap EXIT
 
-# file retention policy
-ls -dt ${RCON_SAVEPATH}/* | tail -n +${FILE_RETENTION} | xargs -d '\n' -r rm --
+	# file retention policy
+	ls -dt ${RCON_SAVEPATH}/* | tail -n +${FILE_RETENTION} | xargs -d '\n' -r rm --
 
-if [[ "${S3_UPLOAD_ENABLED}" == "true" ]]; then
-	# upload to s3
-	set +x
-	mc alias set s3 "${S3_ENDPOINT}" "${S3_ACCESS_KEY}" "${S3_SECRET_KEY}" --api S3v4 || true
-	set -x
-	mc mb --ignore-existing "s3/${S3_BUCKET}"
-	S3_FILENAME=$(basename "${BACKUPFILE}")
-	mc cp "${BACKUPFILE}" "s3/${S3_BUCKET}/mcbackup/${S3_FILENAME}"
+	if [[ "${S3_UPLOAD_ENABLED}" == "true" ]]; then
+		# upload to s3
+		set +x
+		mc alias set s3 "${S3_ENDPOINT}" "${S3_ACCESS_KEY}" "${S3_SECRET_KEY}" --api S3v4 || true
+		set -x
+		mc mb --ignore-existing "s3/${S3_BUCKET}"
+		S3_FILENAME=$(basename "${BACKUPFILE}")
+		mc cp "${BACKUPFILE}" "s3/${S3_BUCKET}/mcbackup/${S3_FILENAME}"
 
-	# s3 retention policy
-	mc rm --recursive --force --older-than "${S3_RETENTION}" "s3/${S3_BUCKET}/mcbackup/"
-fi
+		# s3 retention policy
+		mc rm --recursive --force --older-than "${S3_RETENTION}" "s3/${S3_BUCKET}/mcbackup/"
+	fi
+
+	if (( BACKUP_INTERVAL <= 0 )) &>/dev/null; then
+		break
+	else
+		echo "sleeping ${BACKUP_INTERVAL} ..."
+		sleep ${BACKUP_INTERVAL}
+	fi
+
+done
 
 exit 0
