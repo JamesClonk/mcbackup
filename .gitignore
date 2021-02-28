@@ -13,3 +13,22 @@
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+
+# archives
+*.zip
+*.tgz
+*.gz
+*.tar
+*.jar
+
+# test backups
+tmp/*.gz
+
+# mc
+/world
+/logs
+/banned-ips.json
+/banned-players.json
+/ops.json
+/usercache.json
+/whitelist.json

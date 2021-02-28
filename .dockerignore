@@ -1,0 +1,14 @@
+.env*
+.git
+.gitmodules
+.gitignore
+.goplayrc
+.travis.yml
+.circleci
+Makefile
+Dockerfile
+LICENSE
+NOTICE
+_fixtures
+vendor
+minecraft-server.jar
